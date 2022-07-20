@@ -61,6 +61,7 @@ void GameCanvas::setup() {
 	bulletimage.loadImage("characters1/Bullet/1_Bullet_Bullet 1_000.png");
 	loadMap();
 	fpsfont.loadFont("FreeSans.ttf", 16);
+	teleport.loadImage("teleport.png");
 	cscaleratio = 1;
 	cw = character[0][0].getWidth() / cscaleratio;
 	ch = character[0][0].getHeight() / cscaleratio;
@@ -91,7 +92,9 @@ void GameCanvas::setup() {
 	biw = bulletimage.getWidth();
 	bih = bulletimage.getHeight();
 	bulletspeed = cspeed * 4.0f;
-	enemynum = 10;
+	enemynum = 1;
+	teleportframenum = 10;
+	teleportjumpno = 5;
 	for(int i = 0; i < enemynum; i++) {
 		std::vector<float> ep;
 		ep.push_back(gRandom(mapw - cw));
@@ -103,6 +106,11 @@ void GameCanvas::setup() {
 		eframe.push_back(gRandom(animationframenum[ANIM_IDLEAIM]));
 		eframecount.push_back(gRandom(framecounterlimit));
 		edistance.push_back(gRandom(cw * 10));
+		teleportcounter.push_back(-1);
+		teleportx.push_back(0);
+		teleporty.push_back(0);
+		teleportnewx.push_back(0);
+		teleportnewy.push_back(0);
 	}
 	espeed = cspeed * 60 / 100;
 }
@@ -111,6 +119,7 @@ void GameCanvas::update() {
 	//gLogi("GameCanvas") << "update";
 	moveCharacter();
 	moveCamera();
+	chooseTeleportingEnemies();
 	moveEnemies();
 	moveBullets();
 }
@@ -125,7 +134,10 @@ void GameCanvas::draw() {
 		objectimage[object[i][2]].draw(object[i][0] - camx, object[i][1] - objectimage[object[i][2]].getHeight());
 	}
 	for(int i = 0; i < enemynum; i++) {
-		enemyimage[eanim[i]][eframe[i]].draw(glm::vec2(epos[i][0] + eex[i] - camx, epos[i][1]), glm::vec2(edir[i] * cw, ch), 0.0f);
+		if(teleportcounter[i] > -1) {
+			enemyimage[eanim[i]][eframe[i]].draw(glm::vec2(epos[i][0] + eex[i] - camx, epos[i][1]), glm::vec2(edir[i] * cw, ch), 0.0f);
+			teleport.draw(teleportx[i] - camx, teleporty[i]);
+		} else enemyimage[eanim[i]][eframe[i]].draw(glm::vec2(epos[i][0] + eex[i] - camx, epos[i][1]), glm::vec2(edir[i] * cw, ch), 0.0f);
 	}
 	character[canimationno][cframeno].draw(glm::vec2(cx + cex, cy), glm::vec2(cdirection * cw, ch), 0.0f);
 	for(int i = bullets.size() - 1; i >= 0; i--) {
@@ -222,6 +234,15 @@ void GameCanvas::moveCamera() {
 
 void GameCanvas::moveEnemies() {
 	for(int i = 0; i < enemynum; i++) {
+		if(teleportcounter[i] > -1) {
+			if(teleportcounter[i] == teleportjumpno) {
+				epos[i][0] = teleportnewx[i];
+				epos[i][1] = teleportnewy[i];
+			}
+			teleportcounter[i]++;
+			if(teleportcounter[i] >= teleportframenum) teleportcounter[i] = -1;
+		}
+
 		if(eanim[i] != ANIM_DEATH) edir[i] = -gSign(epos[i][0] - (cx + camx));
 		eex[i] = 0;
 		if(edir[i] == -1) eex[i] = 80;
@@ -263,6 +284,13 @@ void GameCanvas::moveEnemies() {
 			if(eanim[i] != ANIM_DEATH) {
 				if(eanim[i] != ANIM_IDLEAIM) eframe[i] = 0;
 				eanim[i] = ANIM_IDLEAIM;
+				if(eframe[i] == 2) {
+					float bulletx = epos[i][0] + (((edir[i] - 1) / -2) * cw / 3.925f) + (cw * edir[i] / 1.6f);
+					float bullety = epos[i][1] + ch * 5 / 12;
+					float bulletdx = bulletspeed * edir[i];
+					float bulletdy = 0;
+					generateBullet(bulletx, bullety, bulletdx, bulletdy, BULLETOWNER_ENEMY);
+				}
 			}
 		}
 	}
@@ -272,18 +300,25 @@ void GameCanvas::moveBullets() {
 	for(int i = bullets.size() - 1; i >= 0; i--) {
 		bullets[i][0] += bullets[i][2];
 		bullets[i][1] += bullets[i][3];
+		bullets[i][4]++;
+		if(bullets[i][4] > 55) {
+			bullets.erase(bullets.begin() + i);
+			continue;
+		}
 
 		bulletdestroyed = false;
-		for(int j = enemynum - 1; j >= 0; j--) {
-			bool iscolliding = checkCollision(bullets[i][0], bullets[i][1], bullets[i][0] + bulletimage.getWidth(), bullets[i][1] + bulletimage.getHeight(),
-					epos[j][0], epos[j][1], epos[j][0] + cw, epos[j][1] + ch);
-			if(eanim[j] != ANIM_DEATH && iscolliding) {
-				eanim[j] = ANIM_DEATH;
-				eframe[j] = 0;
+		if(bullets[i][5] == BULLETOWNER_CHARACTER) {
+			for(int j = enemynum - 1; j >= 0; j--) {
+				bool iscolliding = checkCollision(bullets[i][0], bullets[i][1], bullets[i][0] + bulletimage.getWidth(), bullets[i][1] + bulletimage.getHeight(),
+						epos[j][0], epos[j][1], epos[j][0] + cw, epos[j][1] + ch);
+				if(eanim[j] != ANIM_DEATH && iscolliding) {
+					eanim[j] = ANIM_DEATH;
+					eframe[j] = 0;
 
-				bulletdestroyed = true;
-				bullets.erase(bullets.begin() + i);
-				break;
+					bulletdestroyed = true;
+					bullets.erase(bullets.begin() + i);
+					break;
+				}
 			}
 		}
 
@@ -374,7 +409,7 @@ void GameCanvas::mouseReleased(int x, int y, int button) {
 	float bullety = cy + ch * 5 / 12;
 	float bulletdx = bulletspeed * cdirection;
 	float bulletdy = 0;
-	generateBullet(bulletx, bullety, bulletdx, bulletdy);
+	generateBullet(bulletx, bullety, bulletdx, bulletdy, BULLETOWNER_CHARACTER);
 
 }
 
@@ -396,13 +431,14 @@ void GameCanvas::hideNotify() {
 
 }
 
-void GameCanvas::generateBullet(float bulletx, float bullety, float bulletdx, float bulletdy) {
+void GameCanvas::generateBullet(float bulletx, float bullety, float bulletdx, float bulletdy, int bulletOwner) {
 	std::vector<float> newbullet;
 	newbullet.push_back(bulletx);
 	newbullet.push_back(bullety);
 	newbullet.push_back(bulletdx);
 	newbullet.push_back(bulletdy);
 	newbullet.push_back(0);
+	newbullet.push_back(bulletOwner);
 	bullets.push_back(newbullet);
 }
 
@@ -411,6 +447,21 @@ bool GameCanvas::checkCollision(int xLeft1, int yUp1, int xRight1, int yBottom1,
 		return true;
 	}
 	return false;
+}
+
+void GameCanvas::chooseTeleportingEnemies() {
+	for(int i = 0; i < enemynum; i++) {
+		if(eanim[i] != ANIM_IDLEAIM) continue;
+		if(teleportcounter[i] > -1) continue;
+		if(epos[i][0] + eex[i] < camx || epos[i][0] + eex[i] > camx + getWidth()) continue;
+		if(gRandom(1000) > 10) continue;
+		teleportcounter[i] = 0;
+		teleportx[i] = epos[i][0] + enemyimage[0][0].getWidth() / 4 - camx; //+ eex[i]
+		teleporty[i] = epos[i][1] - (teleport.getHeight() - enemyimage[0][0].getHeight()) / 2;
+//		teleportnewx[i] = teleportx[i];
+		teleportnewx[i] = camx;
+		teleportnewy[i] = epos[i][1];
+	}
 }
 
 void GameCanvas::loadMap() {
