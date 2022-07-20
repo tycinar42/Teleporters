@@ -46,6 +46,10 @@ private:
 		ANIM_IDLE, ANIM_RUNAIM, ANIM_IDLEAIM, ANIM_JUMPAIM, ANIM_DEATH
 	};
 
+	enum {
+		BULLETOWNER_CHARACTER, BULLETOWNER_ENEMY
+	};
+
     static const int tiletypenum = 16;
     static const int objecttypenum = 14;
     static const int characteranimationnum = 5;
@@ -57,8 +61,9 @@ private:
     void moveBullets();
     void moveCamera();
     bool isOverGroundTile();
-    void generateBullet(float bulletx, float bullety, float bulletdx, float bulletdy);
+    void generateBullet(float bulletx, float bullety, float bulletdx, float bulletdy, int bulletOwner);
 	bool checkCollision(int xLeft1, int yUp1, int xRight1, int yBottom1, int xLeft2, int yUp2, int xRight2, int yBottom2);
+	void chooseTeleportingEnemies();
 
 	gApp* root;
 	gImage background;
@@ -69,6 +74,7 @@ private:
 	gImage bulletimage;
 	gDatabase db;
 	gImage enemyimage[characteranimationnum][charactermaxframenum];
+	gImage teleport;
 //	Character c;
 	float cx, cy;
 	float cw, ch, cscaleratio;
@@ -106,6 +112,10 @@ private:
 	std::vector<int> eanim, eframe, eframecount;
 	std::vector<int> edistance;
 	bool bulletdestroyed;
+	std::vector<int> teleportcounter;
+	int teleportframenum;
+	std::vector<int> teleportx, teleporty, teleportnewx, teleportnewy;
+	int teleportjumpno;
 };
 
 #endif /* GAMECANVAS_H_ */
