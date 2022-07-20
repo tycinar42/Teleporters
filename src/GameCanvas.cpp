@@ -132,7 +132,7 @@ void GameCanvas::draw() {
 		bulletimage.draw(bullets[i][0] - camx, bullets[i][1], biw, bih);
 	}
 
-	fpsfont.drawText("FPS: " + gToStr(root->getFramerate()), 20, 20);
+//	fpsfont.drawText("FPS: " + gToStr(root->getFramerate()), 20, 20);
 }
 
 void GameCanvas::moveCharacter() {
