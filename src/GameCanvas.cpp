@@ -273,6 +273,7 @@ void GameCanvas::moveBullets() {
 		bullets[i][0] += bullets[i][2];
 		bullets[i][1] += bullets[i][3];
 
+		bulletdestroyed = false;
 		for(int j = enemynum - 1; j >= 0; j--) {
 			bool iscolliding = checkCollision(bullets[i][0], bullets[i][1], bullets[i][0] + bulletimage.getWidth(), bullets[i][1] + bulletimage.getHeight(),
 					epos[j][0], epos[j][1], epos[j][0] + cw, epos[j][1] + ch);
@@ -280,7 +281,17 @@ void GameCanvas::moveBullets() {
 				eanim[j] = ANIM_DEATH;
 				eframe[j] = 0;
 
+				bulletdestroyed = true;
 				bullets.erase(bullets.begin() + i);
+				break;
+			}
+		}
+
+		if(bulletdestroyed == true) continue;
+		for(int j = 0; j < object.size(); j++) {
+			if(objectcollidable[object[j][2]] && checkCollision(bullets[i][0], bullets[i][1], bullets[i][0] + bulletimage.getWidth(), bullets[i][1] + bulletimage.getHeight(),
+					object[j][0], object[j][1] - objectimage[object[j][2]].getHeight(), object[j][0] + objectimage[object[j][2]].getWidth(), object[j][1])) {
+				bullets.erase(bullets.begin() + j);
 				break;
 			}
 		}
