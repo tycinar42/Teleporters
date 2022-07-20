@@ -105,6 +105,7 @@ private:
 	float espeed;
 	std::vector<int> eanim, eframe, eframecount;
 	std::vector<int> edistance;
+	bool bulletdestroyed;
 };
 
 #endif /* GAMECANVAS_H_ */
