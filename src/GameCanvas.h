@@ -54,14 +54,20 @@ private:
     static const int objecttypenum = 14;
     static const int characteranimationnum = 5;
     static const int charactermaxframenum = 10;
+    static const int teleportframenum = 10;
 
     void loadMap();
     void moveCharacter();
     void moveEnemies();
     void moveBullets();
     void moveCamera();
+    void drawPlatform();
+    void drawEnemies();
+    void drawCharacter();
+    void drawBullets();
+    void drawGui();
     bool isOverGroundTile();
-    void generateBullet(float bulletx, float bullety, float bulletdx, float bulletdy, int bulletOwner);
+    void generateBullet(float bulletx, float bullety, float bulletdx, float bulletdy, int bulletOwner, float bulletRot);
 	bool checkCollision(int xLeft1, int yUp1, int xRight1, int yBottom1, int xLeft2, int yUp2, int xRight2, int yBottom2);
 	void chooseTeleportingEnemies();
 
@@ -74,7 +80,9 @@ private:
 	gImage bulletimage;
 	gDatabase db;
 	gImage enemyimage[characteranimationnum][charactermaxframenum];
-	gImage teleport;
+	gImage teleport[teleportframenum];
+	gImage healthbar, healthbarframe, healthbarbackground;
+	gFont gameoverfont;
 //	Character c;
 	float cx, cy;
 	float cw, ch, cscaleratio;
@@ -113,9 +121,14 @@ private:
 	std::vector<int> edistance;
 	bool bulletdestroyed;
 	std::vector<int> teleportcounter;
-	int teleportframenum;
+	std::vector<int> teleportframeno;
 	std::vector<int> teleportx, teleporty, teleportnewx, teleportnewy;
 	int teleportjumpno;
+	int emaxy;
+	int healthbarframex, healthbarframey;
+	int healthbarx, healthbary;
+	int chealth, chealthmax;
+	int gameoverx, gameovery;
 };
 
 #endif /* GAMECANVAS_H_ */

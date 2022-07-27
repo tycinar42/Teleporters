@@ -61,7 +61,11 @@ void GameCanvas::setup() {
 	bulletimage.loadImage("characters1/Bullet/1_Bullet_Bullet 1_000.png");
 	loadMap();
 	fpsfont.loadFont("FreeSans.ttf", 16);
-	teleport.loadImage("teleport.png");
+	for(int i = 0; i < teleportframenum; i++) teleport[i].loadImage("teleport_images/Teleport_00" + gToStr(i) + ".png");
+	healthbar.loadImage("healthbar/bar.png");
+	healthbarframe.loadImage("healthbar/barframe.png");
+	healthbarbackground.loadImage("healthbar/barbackground.png");
+	gameoverfont.loadFont("soupofjustice.ttf", 200);
 	cscaleratio = 1;
 	cw = character[0][0].getWidth() / cscaleratio;
 	ch = character[0][0].getHeight() / cscaleratio;
@@ -92,27 +96,37 @@ void GameCanvas::setup() {
 	biw = bulletimage.getWidth();
 	bih = bulletimage.getHeight();
 	bulletspeed = cspeed * 4.0f;
-	enemynum = 1;
-	teleportframenum = 10;
+	enemynum = 10;
 	teleportjumpno = 5;
+	emaxy = getHeight() - tileimage[1].getHeight() / 2 - ch + cgapy;
 	for(int i = 0; i < enemynum; i++) {
 		std::vector<float> ep;
 		ep.push_back(gRandom(mapw - cw));
-		ep.push_back(getHeight() - tileimage[1].getHeight() / 2 - ch + cgapy);
+		//ep.push_back(getHeight() - tileimage[1].getHeight() / 2 - ch + cgapy);
+		ep.push_back(gRandom(emaxy));
 		epos.push_back(ep);
 		edir.push_back(1);
 		eex.push_back(0);
 		eanim.push_back(ANIM_IDLEAIM);
 		eframe.push_back(gRandom(animationframenum[ANIM_IDLEAIM]));
 		eframecount.push_back(gRandom(framecounterlimit));
-		edistance.push_back(gRandom(cw * 10));
+		edistance.push_back((cw + gRandom(cw * 2)));
 		teleportcounter.push_back(-1);
 		teleportx.push_back(0);
 		teleporty.push_back(0);
 		teleportnewx.push_back(0);
 		teleportnewy.push_back(0);
+		teleportframeno.push_back(0);
 	}
 	espeed = cspeed * 60 / 100;
+	healthbarframex = healthbarframe.getWidth() / 8;
+	healthbarframey = healthbarframex;
+	healthbarx = healthbarframex + 69;
+	healthbary = healthbarframey + 15;
+	chealthmax = 100;
+	chealth = chealthmax;
+	gameoverx = (getWidth() - gameoverfont.getStringWidth("GAME OVER!")) / 2;
+	gameovery = (getHeight() + gameoverfont.getStringHeight("GAME OVER!")) / 2;
 }
 
 void GameCanvas::update() {
@@ -126,24 +140,11 @@ void GameCanvas::update() {
 
 void GameCanvas::draw() {
 	//gLogi("GameCanvas") << "draw";
-	background.draw(0, 0, getWidth(), getHeight());
-	for(int i = 0; i < tile.size(); i++) {
-		tileimage[tile[i][2]].draw(tile[i][0] - camx, tile[i][1], tilew, tileh);
-	}
-	for(int i = 0; i < object.size(); i++) {
-		objectimage[object[i][2]].draw(object[i][0] - camx, object[i][1] - objectimage[object[i][2]].getHeight());
-	}
-	for(int i = 0; i < enemynum; i++) {
-		if(teleportcounter[i] > -1) {
-			enemyimage[eanim[i]][eframe[i]].draw(glm::vec2(epos[i][0] + eex[i] - camx, epos[i][1]), glm::vec2(edir[i] * cw, ch), 0.0f);
-			teleport.draw(teleportx[i] - camx, teleporty[i]);
-		} else enemyimage[eanim[i]][eframe[i]].draw(glm::vec2(epos[i][0] + eex[i] - camx, epos[i][1]), glm::vec2(edir[i] * cw, ch), 0.0f);
-	}
-	character[canimationno][cframeno].draw(glm::vec2(cx + cex, cy), glm::vec2(cdirection * cw, ch), 0.0f);
-	for(int i = bullets.size() - 1; i >= 0; i--) {
-		bulletimage.draw(bullets[i][0] - camx, bullets[i][1], biw, bih);
-	}
-
+	drawPlatform();
+	drawEnemies();
+	drawCharacter();
+	drawBullets();
+	drawGui();
 //	fpsfont.drawText("FPS: " + gToStr(root->getFramerate()), 20, 20);
 }
 
@@ -193,6 +194,7 @@ void GameCanvas::moveCharacter() {
 
 	cx += cdx;
 	cy += cdy;
+	if(cy < 0) cy = 0;
 	cex = 0;
 	if(cdirection == -1) cex = 80;
 
@@ -240,7 +242,11 @@ void GameCanvas::moveEnemies() {
 				epos[i][1] = teleportnewy[i];
 			}
 			teleportcounter[i]++;
-			if(teleportcounter[i] >= teleportframenum) teleportcounter[i] = -1;
+			teleportframeno[i]++;
+			if(teleportcounter[i] >= teleportframenum) {
+				teleportcounter[i] = -1;
+				teleportframeno[i] = 0;
+			}
 		}
 
 		if(eanim[i] != ANIM_DEATH) edir[i] = -gSign(epos[i][0] - (cx + camx));
@@ -250,20 +256,21 @@ void GameCanvas::moveEnemies() {
 		float edx, edy;
 		edx = 0.0f;
 		edy = 0.0f;
-		if(eanim[i] != ANIM_DEATH) {
+		if(eanim[i] != ANIM_DEATH && epos[i][0] + cw >= camx && epos[i][0]< camx + getWidth()) {
 			edx = edir[i] * espeed;
-			edy = 0.0f;
+			edy = 2.0f;
 		}
 
-		bool iscolliding = checkCollision(epos[i][0], epos[i][1], epos[i][0] + cw, epos[i][1] + ch,
-				cx + camx - edistance[i], cy, cx + camx + cw + edistance[i], cy + ch);
-		if(iscolliding) {
+		//bool iscolliding = checkCollision(epos[i][0], epos[i][1], epos[i][0] + cw, epos[i][1] + ch,
+		//		cx + camx - edistance[i], cy, cx + camx + cw + edistance[i], cy + ch);
+		if(std::fabs(cx + camx + cw / 2 - (epos[i][0] + cw / 2)) < edistance[i]) {
 			edx = 0.0f;
 			edy = 0.0f;
 		}
 
 		epos[i][0] += edx;
 		epos[i][1] += edy;
+		if(epos[i][1] > emaxy) epos[i][1] = emaxy;
 
 		eframecount[i]++;
 		if(eframecount[i] >= framecounterlimit) {
@@ -284,12 +291,14 @@ void GameCanvas::moveEnemies() {
 			if(eanim[i] != ANIM_DEATH) {
 				if(eanim[i] != ANIM_IDLEAIM) eframe[i] = 0;
 				eanim[i] = ANIM_IDLEAIM;
-				if(eframe[i] == 2) {
+				if((eframe[i] == 2 || eframe[i] == 5) && eframecount[i] == 0 && epos[i][0] + cw >= camx && epos[i][0] < camx + getWidth()) {
 					float bulletx = epos[i][0] + (((edir[i] - 1) / -2) * cw / 3.925f) + (cw * edir[i] / 1.6f);
 					float bullety = epos[i][1] + ch * 5 / 12;
-					float bulletdx = bulletspeed * edir[i];
-					float bulletdy = 0;
-					generateBullet(bulletx, bullety, bulletdx, bulletdy, BULLETOWNER_ENEMY);
+					float bulletrot = std::atan2((cy + ch / 2) - (epos[i][1] + ch / 2), (cx + camx + cw / 2) - (epos[i][0] + cw / 2));
+					float bulletdx = bulletspeed * std::cos(bulletrot);
+					//float bulletdx = bulletspeed * edir[i];
+					float bulletdy = bulletspeed * std::sin(bulletrot);
+					generateBullet(bulletx, bullety, bulletdx, bulletdy, BULLETOWNER_ENEMY, gRadToDeg(bulletrot));
 				}
 			}
 		}
@@ -302,6 +311,10 @@ void GameCanvas::moveBullets() {
 		bullets[i][1] += bullets[i][3];
 		bullets[i][4]++;
 		if(bullets[i][4] > 55) {
+			bullets.erase(bullets.begin() + i);
+			continue;
+		}
+		if(bullets[i][0] > camx + getWidth() || bullets[i][0] + bulletimage.getWidth() < camx) {
 			bullets.erase(bullets.begin() + i);
 			continue;
 		}
@@ -320,6 +333,18 @@ void GameCanvas::moveBullets() {
 					break;
 				}
 			}
+		} else if(bullets[i][5] == BULLETOWNER_ENEMY) {
+			bool iscolliding = checkCollision(bullets[i][0], bullets[i][1], bullets[i][0] + bulletimage.getWidth(), bullets[i][1] + bulletimage.getHeight(),
+					cx + camx, cy, cx + camx + cw, cy + ch);
+			if(iscolliding) {
+				chealth -= 5;
+				if(chealth <= 0) {
+					chealth = 0;
+					gLogi("GameCanvas") << "OYUN BITTI";
+				}
+				bullets.erase(bullets.begin() + i);
+				continue;
+			}
 		}
 
 		if(bulletdestroyed == true) continue;
@@ -333,11 +358,43 @@ void GameCanvas::moveBullets() {
 	}
 }
 
-bool GameCanvas::isOverGroundTile() {
+void GameCanvas::drawPlatform() {
+	background.draw(0, 0, getWidth(), getHeight());
 	for(int i = 0; i < tile.size(); i++) {
-		if(cy < tile[i][1] && cy + ch - cgapy >= tile[i][1] && ((cx + camx + cex >= tile[i][0] && cx + camx + cex < tile[i][0] + tilew) || (cx + camx + cex + cw - cgapx >= tile[i][0] && cx + camx + cex + cw - cgapx < tile[i][0] + tilew))) return 1;
+		tileimage[tile[i][2]].draw(tile[i][0] - camx, tile[i][1], tilew, tileh);
 	}
-	return 0;
+	for(int i = 0; i < object.size(); i++) {
+		objectimage[object[i][2]].draw(object[i][0] - camx, object[i][1] - objectimage[object[i][2]].getHeight());
+	}
+}
+
+void GameCanvas::drawEnemies() {
+	for(int i = 0; i < enemynum; i++) {
+		enemyimage[eanim[i]][eframe[i]].draw(glm::vec2(epos[i][0] + eex[i] - camx, epos[i][1]), glm::vec2(edir[i] * cw, ch), 0.0f);
+		if(teleportcounter[i] > -1) teleport[teleportcounter[i]].draw(teleportx[i] - camx, teleporty[i]);
+	}
+}
+
+void GameCanvas::drawCharacter() {
+	character[canimationno][cframeno].draw(glm::vec2(cx + cex, cy), glm::vec2(cdirection * cw, ch), 0.0f);
+}
+
+void GameCanvas::drawBullets() {
+	for(int i = bullets.size() - 1; i >= 0; i--) {
+		bulletimage.draw(bullets[i][0] - camx, bullets[i][1], biw, bih, bullets[i][6]);
+	}
+}
+
+void GameCanvas::drawGui() {
+	healthbarbackground.draw(healthbarx, healthbary);
+	healthbar.drawSub(healthbarx, healthbary, healthbar.getWidth() * chealth / chealthmax, healthbar.getHeight(),
+			healthbar.getWidth() - healthbar.getWidth() * chealth / chealthmax, 0, healthbar.getWidth() * chealth / chealthmax, healthbar.getHeight());
+	healthbarframe.draw(healthbarframex, healthbarframey);
+	if(chealth <= 0) {
+		setColor(255, 220, 0);
+		gameoverfont.drawText("GAME OVER!", gameoverx, gameovery);
+		setColor(255, 255, 255);
+	}
 }
 
 void GameCanvas::keyPressed(int key) {
@@ -409,7 +466,7 @@ void GameCanvas::mouseReleased(int x, int y, int button) {
 	float bullety = cy + ch * 5 / 12;
 	float bulletdx = bulletspeed * cdirection;
 	float bulletdy = 0;
-	generateBullet(bulletx, bullety, bulletdx, bulletdy, BULLETOWNER_CHARACTER);
+	generateBullet(bulletx, bullety, bulletdx, bulletdy, BULLETOWNER_CHARACTER, (1 - cdirection) * 90.0f);
 
 }
 
@@ -431,7 +488,14 @@ void GameCanvas::hideNotify() {
 
 }
 
-void GameCanvas::generateBullet(float bulletx, float bullety, float bulletdx, float bulletdy, int bulletOwner) {
+bool GameCanvas::isOverGroundTile() {
+	for(int i = 0; i < tile.size(); i++) {
+		if(cy < tile[i][1] && cy + ch - cgapy >= tile[i][1] && ((cx + camx + cex >= tile[i][0] && cx + camx + cex < tile[i][0] + tilew) || (cx + camx + cex + cw - cgapx >= tile[i][0] && cx + camx + cex + cw - cgapx < tile[i][0] + tilew))) return 1;
+	}
+	return 0;
+}
+
+void GameCanvas::generateBullet(float bulletx, float bullety, float bulletdx, float bulletdy, int bulletOwner, float bulletRot) {
 	std::vector<float> newbullet;
 	newbullet.push_back(bulletx);
 	newbullet.push_back(bullety);
@@ -439,6 +503,7 @@ void GameCanvas::generateBullet(float bulletx, float bullety, float bulletdx, fl
 	newbullet.push_back(bulletdy);
 	newbullet.push_back(0);
 	newbullet.push_back(bulletOwner);
+	newbullet.push_back(bulletRot);
 	bullets.push_back(newbullet);
 }
 
@@ -454,12 +519,13 @@ void GameCanvas::chooseTeleportingEnemies() {
 		if(eanim[i] != ANIM_IDLEAIM) continue;
 		if(teleportcounter[i] > -1) continue;
 		if(epos[i][0] + eex[i] < camx || epos[i][0] + eex[i] > camx + getWidth()) continue;
-		if(gRandom(1000) > 10) continue;
+		if(gRandom(1000) > 1) continue;
 		teleportcounter[i] = 0;
-		teleportx[i] = epos[i][0] + enemyimage[0][0].getWidth() / 4 - camx; //+ eex[i]
-		teleporty[i] = epos[i][1] - (teleport.getHeight() - enemyimage[0][0].getHeight()) / 2;
+		teleportx[i] = epos[i][0] + ((enemyimage[0][0].getWidth() - teleport[0].getWidth()) / 2); //+ eex[i]
+		teleporty[i] = epos[i][1] - (teleport[0].getHeight() - enemyimage[0][0].getHeight()) / 2;
 //		teleportnewx[i] = teleportx[i];
-		teleportnewx[i] = camx;
+		//int newdir = gSign((cx + camx) - epos[i][0]);
+		teleportnewx[i] = camx + gRandom(getWidth() - cw);
 		teleportnewy[i] = epos[i][1];
 	}
 }
